@@ -1,101 +1,87 @@
-import Image from "next/image";
+// pages/index.js
+import { useState, useRef } from "react";
+import { storage } from "../lib/firebase";
+import { ref, uploadBytes } from "firebase/storage";
 
 export default function Home() {
-  return (
-    <div className="grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20 font-[family-name:var(--font-geist-sans)]">
-      <main className="flex flex-col gap-8 row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="https://nextjs.org/icons/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="list-inside list-decimal text-sm text-center sm:text-left font-[family-name:var(--font-geist-mono)]">
-          <li className="mb-2">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] px-1 py-0.5 rounded font-semibold">
-              src/app/page.js
-            </code>
-            .
-          </li>
-          <li>Save and see your changes instantly.</li>
-        </ol>
+  const [recording, setRecording] = useState(false);
+  const [videoBlob, setVideoBlob] = useState(null);
+  const [timer, setTimer] = useState(60);
+  const mediaRecorderRef = useRef(null);
+  const videoRef = useRef(null);
 
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="https://nextjs.org/icons/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:min-w-44"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
-        </div>
-      </main>
-      <footer className="row-start-3 flex gap-6 flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="https://nextjs.org/icons/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="https://nextjs.org/icons/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="https://nextjs.org/icons/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
+  const startRecording = async () => {
+    setRecording(true);
+    setTimer(60);
+
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: "user" },
+      audio: true,
+    });
+    videoRef.current.srcObject = stream;
+
+    mediaRecorderRef.current = new MediaRecorder(stream);
+    const chunks = [];
+
+    mediaRecorderRef.current.ondataavailable = (e) => {
+      chunks.push(e.data);
+    };
+
+    mediaRecorderRef.current.onstop = () => {
+      const blob = new Blob(chunks, { type: "video/webm" });
+      setVideoBlob(blob);
+    };
+
+    mediaRecorderRef.current.start();
+
+    const countdown = setInterval(() => {
+      setTimer((prev) => {
+        if (prev <= 1) {
+          clearInterval(countdown);
+          stopRecording();
+        }
+        return prev - 1;
+      });
+    }, 1000);
+  };
+
+  const stopRecording = () => {
+    setRecording(false);
+    mediaRecorderRef.current.stop();
+  };
+
+  const uploadVideo = async () => {
+    if (!videoBlob) return;
+    const storageRef = ref(storage, `videos/${Date.now()}.webm`);
+    try {
+      await uploadBytes(storageRef, videoBlob);
+      alert("Vídeo enviado com sucesso!");
+    } catch (error) {
+      alert("Falha ao enviar o vídeo.");
+    }
+  };
+
+  return (
+    <div style={{ textAlign: "center", padding: "20px" }}>
+      <h1>Gravação de Vídeo</h1>
+      <video
+        ref={videoRef}
+        autoPlay
+        style={{ width: "100%", maxWidth: "500px" }}
+      />
+      <div>
+        {recording ? (
+          <div>
+            <p>Gravando... Tempo restante: {timer}s</p>
+            <button onClick={stopRecording}>Parar Gravação</button>
+          </div>
+        ) : (
+          <button onClick={startRecording}>Iniciar Gravação</button>
+        )}
+        <button onClick={uploadVideo} disabled={!videoBlob}>
+          Enviar Vídeo
+        </button>
+      </div>
     </div>
   );
 }
